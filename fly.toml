@@ -12,7 +12,7 @@ primary_region = 'dfw'
   PORT = "8000"  # uvicorn already binds to 8000; Fly sets $PORT anyway
 
 [[vm]]
-  memory = '1gb'
+  memory = '512mb'
   cpu_kind = 'shared'
   cpus = 1
 
@@ -21,7 +21,7 @@ primary_region = 'dfw'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ['app']
 
   [[http_service.checks]]
