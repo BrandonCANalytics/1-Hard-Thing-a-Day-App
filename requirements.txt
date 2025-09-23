@@ -1,0 +1,7 @@
+typing
+fastapi
+uvicorn
+pydantic>=2
+sqlalchemy
+asyncpg
+python-dotenv
