@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy import select, func
+from utils.ip_utils import hash_ip
 
 
 
@@ -159,7 +160,9 @@ class SubmissionRow(Base):
     __tablename__ = "submissions"
     id: Mapped[int] = mapped_column(primary_key=True)
     item_id: Mapped[int] = mapped_column()
-    created_ip: Mapped[Optional[str]] = mapped_column(INET, nullable=True)
+    # Keep raw only temporarily if it still exists:
+    # created_ip: Mapped[Optional[str]] = mapped_column(INET, nullable=True)
+    created_ip_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 async def get_db():
@@ -198,8 +201,7 @@ class PublicItem(BaseModel):
 # ---------- util ----------
 def get_client_ip(request: Request) -> str:
     xff = request.headers.get("x-forwarded-for")
-    ip = (xff.split(",")[0].strip() if xff else request.client.host)
-    return ip
+    return (xff.split(",")[0].strip() if xff else request.client.host)
 
 # ---------- routes overriding earlier in-memory ones ----------
 @app.on_event("startup")
@@ -233,14 +235,15 @@ async def submit_item(payload: SubmitItem, request: Request, db: AsyncSession = 
 
     # rate limit: 10 submissions / day per IP
     ip = get_client_ip(request)
+    ip_h = hash_ip(ip)
     one_day_ago = text("now() - interval '1 day'")
     count_q = select(func.count()).select_from(SubmissionRow).where(
-    SubmissionRow.created_ip == ip,
+    SubmissionRow.created_ip_hash == ip_h,
     SubmissionRow.created_at > func.now() - text("interval '1 day'")
 )
     count = (await db.execute(count_q)).scalar_one()
     if count >= 10:
-        raise HTTPException(429, "Rate limit exceeded. Try again tomorrow.")
+      raise HTTPException(429, "Rate limit exceeded. Try again tomorrow.")
 
     # duplicate check (case-insensitive handled by citext UNIQUE, but we preflight)
     exists = await db.execute(select(ItemRow).where(ItemRow.name == payload.name))
@@ -254,12 +257,13 @@ async def submit_item(payload: SubmitItem, request: Request, db: AsyncSession = 
         is_half=payload.is_half,
         weight=payload.weight,
         status=ItemStatus.pending,
-        created_ip=ip
+        #created_ip=ip
     )
     db.add(row)
     await db.flush()  # get row.id
 
-    db.add(SubmissionRow(item_id=row.id, created_ip=ip))
+    # submissions log with HASH ONLY
+    db.add(SubmissionRow(item_id=row.id, created_ip_hash=ip_h))
     await db.commit()
     return {"ok": True, "id": row.id, "status": "pending", "message": "Submitted for review."}
 
