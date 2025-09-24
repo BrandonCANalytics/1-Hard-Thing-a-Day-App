@@ -110,6 +110,9 @@ INDEX_HTML = """
 
     loadCatalog();
   </script>
+  <footer style="margin-top:2rem; padding:0.5rem; font-size:0.8rem; color:#888; text-align:center;">
+  🔒 Privacy: no accounts, no raw IP storage, no data selling.
+  </footer>
 </body>
 </html>
 """
